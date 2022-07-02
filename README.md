@@ -1,4 +1,114 @@
-![Github Actions](https://github.com/ava-labs/subnet-evm/actions/workflows/lint-tests-release.yml/badge.svg)
+# Experimental Changes
+
+Herein is an experimental custom vm that, assuming, a stablecoin as the native gas token attempts to aim for a $0.01
+transfer fee for most accounts and $0.10 for new accounts.
+
+Fees are accumulated to the validators instead of being burned
+
+Three new config properties have been added:
+
+1. **defaultFeeRecipient** Added this config to prevent the burning gas tokens *at the subnet level*. Typically, one would first set `allowFeeRecipients=true` in the subnet config; however if a validator mistakenly does not include a `feeRecipient` in their chain config (unique to their node), the default behavior would have been to burn the gas value for any blocks produced by that validator.
+
+2. **nonceThresholdForNewAccounts** If set, any account with a nonce less than this value is considered a new account for the purposes of transfer fees (see below)
+
+4. **gasMultiplierForNewAccounts** New accounts, as defined above, have their gas usage multiplied by this factor. This allows you to, for example, set a target transfer fee of X for new accounts and X/10 for established accounts, as defined by their nonce.
+
+You can check out the config used in `scripts/run.sh`
+
+In addition to the above new properties, the config uses 2 stateful precompiles: `contractDeployerAllowListConfig` and `contractNativeMinterConfig`
+
+In this example:
+
+- Only the BRIDGE user can deploy new contracts. Uses an EOA as the bridge user for simplicity.
+- The BRIDGE user can mint native tokens
+- Gas costs are set such that established users can make transfers at a cost of $0.01/tx (assuming the native token is a stablecoin)
+- New users pay 10x ($0.10/tx) for spam prevention
+- Gas fees are meant to accumulate to the validators instead of being burned. We add an extra safety net in case the validator erroneously does not include a `feeRecipient` in their chain config by adding a new `defaultFeeRecipient` property at the subnet level
+- Disallows custom contract creation; but we modify the vm to permit contract creations from allowlisted contracts even if user (tx.origin) does not have deploy permissions
+
+## Trying it out
+
+The examples below use [cast](https://book.getfoundry.sh/reference/cast/index.html)
+
+First create 3 new addresses with `cast wallet new` and then run a local network with the subnet:
+
+```
+## only the bridge account will be able to
+## (1) mint new native tokens, (2) deploy new contracts
+export BRIDGE=<0x...>
+export FEE_RECV=<0x...>
+export SOME_USER=<0x...>
+export BRIDGE_KEY=<KEY_FOR_BRIDGE>
+
+./scripts/run.sh 1.7.13 $BRIDGE $FEE_RECV
+```
+
+```
+export ETH_RPC_URL=<ADDRESS_PRINTED_OUT_BY_ABOVE>
+
+$ cast balance $BRIDGE  | cast --from-wei
+100
+
+$ cast balance $FEE_RECV  | cast --from-wei
+0
+
+$ cast balance $SOME_USER  | cast --from-wei
+0
+
+## send 10 transactions from BRIDGE -> SOME_USER
+$ for i in $(seq 0 9); do cast send --private-key $BRIDGE_KEY $SOME_USER --value 1ether --cast-async --nonce $i; done
+
+## First 5 transactions should have a gas usage of 210,000 (since we used a multiplier of 10x)
+## Next 5 transactions should have a gas usage of 21,000 (since the nonce threshold for new accounts was set to 5)
+
+## Total fees accumulated this point should be a less than $0.55
+$ cast balance $FEE_RECV  | cast --from-wei
+0.523215000000000000
+
+## User should have received $10
+$ cast balance $SOME_USER  | cast --from-wei
+10.000000000000000000
+
+## Let's try out native token minting
+
+## Confirm BRIDGE is on the allowlist
+$ cast call 0x0200000000000000000000000000000000000001 'readAllowList(address)(uint256)' $BRIDGE
+2
+
+## And, mint $5...
+$ cast send --private-key $BRIDGE_KEY  0x0200000000000000000000000000000000000001 'mintNativeCoin(address, uint256)' $SOME_USER $(cast to-wei 5)
+
+$ cast balance $SOME_USER  | cast --from-wei
+15.000000000000000000
+```
+
+Allow users to deploy (only) from allowlisted contract factories:
+
+```shell
+## using safe-contracts (https://github.com/safe-global/safe-contracts) (details left to the reader)
+## deploy Gnosis Safe on this new subnet
+$ NODE_URL=$ETH_RPC_URL PK=$BRIDGE_KEY CUSTOM_DETERMINISTIC_DEPLOYMENT="true" yarn hardhat --network custom deploy 
+factory: 0x5ec817e60bb24161d098Da64F711d734c1991a93
+GnosisSafe singleton: 0x5ec817e60bb24161d098Da64F711d734c1991a93
+
+## enable GnosisSafe factory to create contracts on behalf of users
+$ cast send --private-key $BRIDGE_KEY 0x0200000000000000000000000000000000000000 'setEnabled(address)' "0x5ec817e60bb24161d098Da64F711d734c1991a93"
+
+## confirm
+$ cast call 0x0200000000000000000000000000000000000000 "readAllowList(address)(uint256)" "0x5ec817e60bb24161d098Da64F711d734c1991a93"
+1
+
+## Now users who do not normally have permission to deploy custom contracts can still
+## deploy contracts via an allowlisted contract factory (in this example, Gnosis Safe proxies)
+## using safe-tasks (https://github.com/5afe/safe-tasks)
+$ NETWORK=custom NODE_URL=$ETH_RPC_URL PK=$USER_PKK yarn safe create --factory 0x5ec817e60bb24161d098Da64F711d734c1991a93 --singleton 0xc5539e0e5579A85D6A5c51eF722DA54190f7Ad6B
+
+```
+
+
+## Disclaimer
+
+This changes in this fork are experimental and not meant for production use. It's just for fun!
 
 # Subnet EVM
 

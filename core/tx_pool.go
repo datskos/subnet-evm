@@ -749,6 +749,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if err != nil {
 		return err
 	}
+	intrGas *= pool.chainconfig.GetFeeMultiplierForAccountNonce(tx.Nonce())
 	if txGas := tx.Gas(); txGas < intrGas {
 		return fmt.Errorf("%w: address %v tx gas (%v) < intrinsic gas (%v)", ErrIntrinsicGas, from.Hex(), tx.Gas(), intrGas)
 	}

@@ -19,16 +19,24 @@ fi
 VERSION=$1
 if [[ -z "${VERSION}" ]]; then
   echo "Missing version argument!"
-  echo "Usage: ${0} [VERSION] [GENESIS_ADDRESS]" >> /dev/stderr
+  echo "Usage: ${0} [VERSION] [GENESIS_ADDRESS] [DEFAULT_FEE_RECIPIENT]" >> /dev/stderr
   exit 255
 fi
 
 GENESIS_ADDRESS=$2
 if [[ -z "${GENESIS_ADDRESS}" ]]; then
   echo "Missing address argument!"
-  echo "Usage: ${0} [VERSION] [GENESIS_ADDRESS]" >> /dev/stderr
+  echo "Usage: ${0} [VERSION] [GENESIS_ADDRESS] [DEFAULT_FEE_RECIPIENT]" >> /dev/stderr
   exit 255
 fi
+
+DEFAULT_FEE_RECIPIENT=$3
+if [[ -z "${DEFAULT_FEE_RECIPIENT}" ]]; then
+  echo "Missing address argument!"
+  echo "Usage: ${0} [VERSION] [GENESIS_ADDRESS] [DEFAULT_FEE_RECIPIENT]" >> /dev/stderr
+  exit 255
+fi
+
 
 MODE=${MODE:-run}
 E2E=${E2E:-false}
@@ -42,6 +50,7 @@ echo "Running with:"
 echo VERSION: ${VERSION}
 echo MODE: ${MODE}
 echo GENESIS_ADDRESS: ${GENESIS_ADDRESS}
+echo DEFAULT_FEE_RECIPIENT: ${DEFAULT_FEE_RECIPIENT}
 echo AVALANCHE_LOG_LEVEL: ${AVALANCHE_LOG_LEVEL}
 
 ############################
@@ -114,18 +123,30 @@ if [[ ${E2E} != true ]]; then
     "subnetEVMTimestamp": 0,
     "feeConfig": {
       "gasLimit": 20000000,
-      "minBaseFee": 1000000000,
-      "targetGas": 100000000,
+      "minBaseFee": 450000000000,
+      "targetGas": 450000000000,
       "baseFeeChangeDenominator": 48,
       "minBlockGasCost": 0,
-      "maxBlockGasCost": 10000000,
+      "maxBlockGasCost": 4500000000,
       "targetBlockRate": 2,
-      "blockGasCostStep": 500000
+      "blockGasCostStep": 5000000
+    },
+    "allowFeeRecipients": true,
+    "defaultFeeRecipient": "${DEFAULT_FEE_RECIPIENT}",
+    "nonceThresholdForNewAccounts": 5,
+    "gasMultiplierForNewAccounts": 10,
+    "contractDeployerAllowListConfig": {
+          "blockTimestamp": 0,
+          "adminAddresses": ["${GENESIS_ADDRESS}"]
+    },
+    "contractNativeMinterConfig": {
+        "blockTimestamp": 0,
+        "adminAddresses": ["${GENESIS_ADDRESS}"]
     }
   },
   "alloc": {
     "${GENESIS_ADDRESS:2}": {
-      "balance": "0x52B7D2DCC80CD2E4000000"
+      "balance": "0x3635c9adc5dea00000"
     }
   },
   "nonce": "0x0",

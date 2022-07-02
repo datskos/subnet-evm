@@ -324,7 +324,12 @@ func (vm *VM) Initialize(
 		}
 		return errors.New("cannot specify a custom fee recipient on this blockchain")
 	case g.Config.AllowFeeRecipients:
-		log.Warn("Chain enabled `AllowFeeRecipients`, but chain config has not specified any coinbase address. Defaulting to the blackhole address.")
+		if g.Config.DefaultFeeRecipient != common.BigToAddress(big.NewInt(0)) {
+			log.Warn(fmt.Sprintf("Chain enabled `AllowFeeRecipients`, but chain config has not specified any coinbase address. Defaulting to the default fee address specified in subnet config %s.", g.Config.DefaultFeeRecipient.String()))
+			ethConfig.Miner.Etherbase = g.Config.DefaultFeeRecipient
+		} else {
+			log.Warn("Chain enabled `AllowFeeRecipients`, but chain config has not specified any coinbase address. Defaulting to the blackhole address.")
+		}
 	}
 
 	vm.genesisHash = ethConfig.Genesis.ToBlock(nil).Hash()

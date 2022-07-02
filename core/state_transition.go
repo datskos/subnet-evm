@@ -325,9 +325,11 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	gas *= st.evm.ChainConfig().GetFeeMultiplierForAccountNonce(st.evm.StateDB.GetNonce(msg.From()))
 	if st.gas < gas {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
 	}
+
 	st.gas -= gas
 
 	// Check clause 6

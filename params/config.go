@@ -84,8 +84,8 @@ var (
 		AllowFeeRecipients:  false,
 	}
 
-	TestChainConfig        = &ChainConfig{big.NewInt(1), big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), DefaultFeeConfig, false, precompile.ContractDeployerAllowListConfig{}, precompile.ContractNativeMinterConfig{}, precompile.TxAllowListConfig{}}
-	TestPreSubnetEVMConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, DefaultFeeConfig, false, precompile.ContractDeployerAllowListConfig{}, precompile.ContractNativeMinterConfig{}, precompile.TxAllowListConfig{}}
+	TestChainConfig        = &ChainConfig{big.NewInt(1), big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), DefaultFeeConfig, false, common.BigToAddress(big.NewInt(0)), 0, 0, precompile.ContractDeployerAllowListConfig{}, precompile.ContractNativeMinterConfig{}, precompile.TxAllowListConfig{}}
+	TestPreSubnetEVMConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, DefaultFeeConfig, false, common.BigToAddress(big.NewInt(0)), 0, 0, precompile.ContractDeployerAllowListConfig{}, precompile.ContractNativeMinterConfig{}, precompile.TxAllowListConfig{}}
 )
 
 // ChainConfig is the core config which determines the blockchain settings.
@@ -113,8 +113,12 @@ type ChainConfig struct {
 
 	SubnetEVMTimestamp *big.Int `json:"subnetEVMTimestamp,omitempty"` // A placeholder for the latest avalanche forks (nil = no fork, 0 = already activated)
 
-	FeeConfig          FeeConfig `json:"feeConfig"`                    // Set the configuration for the dynamic fee algorithm
-	AllowFeeRecipients bool      `json:"allowFeeRecipients,omitempty"` // Allows fees to be collected by block builders.
+	FeeConfig           FeeConfig      `json:"feeConfig"`                     // Set the configuration for the dynamic fee algorithm
+	AllowFeeRecipients  bool           `json:"allowFeeRecipients,omitempty"`  // Allows fees to be collected by block builders.
+	DefaultFeeRecipient common.Address `json:"defaultFeeRecipient,omitempty"` // The DefaultFeeRecipient is used for all blocks rewards for validators that have not set feeRecipient in their chain configs when AllowFeeRecipients is set
+
+	NonceThresholdForNewAccounts uint64 `json:"nonceThresholdForNewAccounts"` // accounts with nonce values less than this threshold are considered new accounts for the purpose of gas adjustment
+	GasMultiplierForNewAccounts  uint64 `json:"gasMultiplierForNewAccounts"`  // if >0, multiply gas by this value for new accounts, as defined by the above config
 
 	ContractDeployerAllowListConfig precompile.ContractDeployerAllowListConfig `json:"contractDeployerAllowListConfig,omitempty"` // Config for the contract deployer allow list precompile
 	ContractNativeMinterConfig      precompile.ContractNativeMinterConfig      `json:"contractNativeMinterConfig,omitempty"`      // Config for the native minter precompile
@@ -262,6 +266,13 @@ func (c *ChainConfig) GetFeeConfig() FeeConfig {
 		return DefaultFeeConfig
 	}
 	return c.FeeConfig
+}
+
+func (c *ChainConfig) GetFeeMultiplierForAccountNonce(nonce uint64) uint64 {
+	if nonce >= c.NonceThresholdForNewAccounts || c.GasMultiplierForNewAccounts == 0 {
+		return 1
+	}
+	return c.GasMultiplierForNewAccounts
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
